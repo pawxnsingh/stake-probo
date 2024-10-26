@@ -1,0 +1,29 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "exports": {
+    ".": "./src/"
+  },
+  "scripts": {
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:seed": "tsx src/seed.ts",
+    "dev": "here add the tswatch -- for hot reloading",
+    "format": "prisma format",
+    "generate": "prisma generate",
+    "lint": "eslint . --max-warnings 0",
+    "prebuild": "npm run generate",
+    "predev": "npm run generate",
+    "studio": "prisma studio"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "*"
+  },
+  "keywords": [
+    "punjabi bois"
+  ],
+  "author": "",
+  "license": "ISC",
+  "description": "Server of the gambling website"
+}
