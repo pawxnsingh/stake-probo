@@ -1,0 +1,7 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "this is the server folder",
+  "main": "index.js",
+  "license": "MIT"
+}
