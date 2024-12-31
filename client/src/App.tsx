@@ -1,35 +1,56 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
+import {useState} from 'react'
 import './App.css'
+import getGoogleOauthUrl from './utils/getGoogleUrl'
+import axios from "axios";
 
 function App() {
-  const [count, setCount] = useState(0)
+    const [email, setEmail] = useState("")
+    const [password, setPassword] = useState("")
 
-  return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    return (
+        <>
+            <div>
+                <input type="text" placeholder={"email"} onChange={(e) => {
+                    setEmail(e.target.value)
+                }}/>
+                <input type="text" placeholder={"password"} onChange={(e) => {
+                    setPassword(e.target.value)
+                }}/>
+            </div>
+
+            <button onClick={async () => {
+                const res = await axios.post("http://localhost:3000/api/auth/signin", {
+                    email: email,
+                    password: password
+                }, {
+                    withCredentials: true
+                })
+                console.log(res.data)
+            }}>
+                Signin
+            </button>
+            <h1>Vite + React</h1>
+            <div className="card">
+                <button>
+                    <a href={getGoogleOauthUrl()}>
+                        Login with google
+                    </a>
+                </button>
+            </div>
+
+
+            <button onClick={async () => {
+                await axios.post("http://localhost:3000/api/auth/two-factor", {
+                    enable: true
+                }, {
+                    withCredentials: true
+                });
+            }}>Submit
+            </button>
+
+
+        </>
+    )
 }
 
 export default App

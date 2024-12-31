@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String                 @id @default(cuid())
+  name                  String?
+  email                 String                 @unique
+  emailVerified         DateTime?
+  image                 String?
+  username              String                 @unique
+  country_code          Int?
+  phone                 Int?                   @unique
+  dob                   DateTime?
+  password              String? // why optional, user can use oauth provider
+  role                  UserRole               @default(user)
+  accounts              Account[]
+  isTwoFactorEnabled    Boolean                @default(false)
+  // where to send the user verification code if he has enabled it
+  twoFactorConfirmation TwoFactorConfirmation? // making it optional 1-1
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+}
+
+// if user has entry in this table only then he is allowed to logged in
+model TwoFactorConfirmation {
+  id     String @id @default(cuid())
+  userId String
+  User   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId])
+}
+
+model Account {
+  id                String   @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // this is composite primary key
+  @@unique([provider, providerAccountId])
+}
+
+// this is used to create/store email verification token
+model VerificationToken {
+  id      String   @id @default(cuid())
+  email   String
+  token   String   @unique
+  expires DateTime
+
+  @@unique([email, token])
+}
+
+// just make it sepreate for security purposes
+model PasswordResetToken {
+  id      String   @id @default(cuid())
+  email   String
+  token   String   @unique
+  expires DateTime
+
+  @@unique([email, token])
+}
+
+// this is used to store the twoFacror Token
+model TwoFactorToken {
+  id      String   @id @default(cuid())
+  email   String
+  token   String   @unique
+  expires DateTime
+
+  @@unique([email, token])
+}
+
+enum UserRole {
+  user
+  admin
+}
