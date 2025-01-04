@@ -21,10 +21,35 @@ model User {
   role                  UserRole               @default(user)
   accounts              Account[]
   isTwoFactorEnabled    Boolean                @default(false)
+  ghostMode             Boolean                @default(false)
   // where to send the user verification code if he has enabled it
   twoFactorConfirmation TwoFactorConfirmation? // making it optional 1-1
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
+  Bet                   Bet[]
+  Balance               Balance[]
+  ClientSeed            ClientSeed[]
+  ServerSeed            ServerSeed[]
+
+  @@index([email])
+}
+
+enum UserRole {
+  user
+  admin
+}
+
+// user can have multiple balances for the multiple currency
+model Balance {
+  id        String   @id @default(cuid())
+  userId    String
+  currency  Currency
+  amount    Decimal  @db.Decimal(20, 8)
+  user      User     @relation(fields: [userId], references: [id], onDelete: NoAction)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, currency])
 }
 
 // if user has entry in this table only then he is allowed to logged in
@@ -55,6 +80,7 @@ model Account {
 
   // this is composite primary key
   @@unique([provider, providerAccountId])
+  @@index([userId])
 }
 
 // this is used to create/store email verification token
@@ -87,7 +113,119 @@ model TwoFactorToken {
   @@unique([email, token])
 }
 
-enum UserRole {
-  user
-  admin
+// these two seed schema is for group games like crash, such that it ensure the user that the game is fair
+model ClientSeed {
+  id        String   @id @default(uuid())
+  userId    String
+  seed      String
+  user      User     @relation(fields: [userId], references: [id])
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
+
+model ServerSeed {
+  id           String   @id @default(uuid())
+  userId       String
+  nonce        Int
+  seedHash     String
+  nextSeedHash String
+  revealed     Boolean  @default(false)
+  user         User     @relation(fields: [userId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// game logic
+model Bet {
+  id               String    @id @default(cuid())
+  userId           String
+  gameId           String? // for multiplayers games
+  active           Boolean   @default(true)
+  payoutMultiplier Decimal   @db.Decimal(20, 8)
+  amountMultiplier Decimal   @db.Decimal(20, 8)
+  amount           Decimal   @db.Decimal(20, 8)
+  payout           Decimal   @db.Decimal(20, 8)
+  currency         Currency
+  game             GameType
+  result           BetResult @default(PENDING)
+  cashoutAt        Decimal?  @db.Decimal(20, 8)
+  user             User      @relation(fields: [userId], references: [id])
+  state            GameState @relation(fields: [stateId], references: [id])
+  stateId          String
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+model GameState {
+  id        String   @id @default(cuid())
+  game      GameType
+  stateData Json
+  Bet       Bet[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum GameType {
+  PLINKO
+  MINES
+  DICE
+  WHEEL
+  DRAGON_TOWER
+  CRASH
+  LIMBO
+  KENO
+  BLACKJACK
+}
+
+enum BetResult {
+  PENDING
+  WIN
+  LOSE
+  CASHOUT
+  BUST
+}
+
+enum Currency {
+  BTC
+  ETH
+  SOL
+  USDT
+  USDC
+}
+
+enum Risk {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// {"data":{"plinkoBet":{"id":"bc3b7a34-e013-4825-b4b8-b784cf6d692e","active":false,"payoutMultiplier":0.3,"amountMultiplier":1,"amount":0,"payout":0,"updatedAt":"Thu, 02 Jan 2025 04:14:59 GMT","currency":"btc","game":"plinko","user":{"id":"8f7729d5-3b88-455a-8c5d-fc475592e90b","name":"0x9898"},"state":{"risk":"high","rows":10,"point":404.3613514258761,"path":["R","L","L","L","R","L","L","R","L","R"]}}}}
+
+// {"data":{"diceRoll":{"id":"cc225796-e319-439b-a607-8d1202a26338","active":false,"payoutMultiplier":0,"amountMultiplier":1,"amount":0,"payout":0,"updatedAt":"Thu, 02 Jan 2025 05:49:17 GMT","currency":"btc","game":"dice","user":{"id":"8f7729d5-3b88-455a-8c5d-fc475592e90b","name":"0x9898"},"state":{"result":36.04,"target":50.5,"condition":"above"}}}}
+
+// {"data":{"minesNext":{"id":"406f7d3f-5c9d-4ac9-97d6-0809f95ab868","active":true,"payoutMultiplier":0,"amountMultiplier":1,"amount":0,"payout":0,"updatedAt":"Thu, 02 Jan 2025 05:53:54 GMT","currency":"btc","game":"mines","user":{"id":"8f7729d5-3b88-455a-8c5d-fc475592e90b","name":"0x9898"},"state":{"mines":null,"minesCount":3,"rounds":[{"field":23,"payoutMultiplier":1.125},{"field":24,"payoutMultiplier":1.2857142857142856}]}}}}
+
+// {"data":{"wheelSpin":{"id":"9dba8266-2c16-4640-9674-30a0d31ed7c3","active":false,"payoutMultiplier":0,"amountMultiplier":1,"amount":0,"payout":0,"updatedAt":"Thu, 02 Jan 2025 05:51:32 GMT","currency":"btc","game":"wheel","user":{"id":"8f7729d5-3b88-455a-8c5d-fc475592e90b","name":"0x9898"},"state":{"result":47,"segments":50,"risk":"medium"}}}}
+
+// {"data":{"dragonTowerNext":{"id":"3d7c5f23-d7cb-4304-9491-8851091089af","active":false,"payoutMultiplier":37.67,"amountMultiplier":1,"amount":0,"payout":0,"updatedAt":"Thu, 02 Jan 2025 04:24:20 GMT","currency":"btc","game":"dragonTower","user":{"id":"8f7729d5-3b88-455a-8c5d-fc475592e90b","name":"0x9898"},"state":{"currentRound":9,"playedRounds":[[2,0],[0,1],[1,2],[1,0],[1,2],[0,2],[1,0],[2,1],[1,2]],"difficulty":"medium","rounds":[[2,0],[0,1],[1,2],[1,0],[1,2],[0,2],[1,0],[2,1],[1,2]],"tilesSelected":[2,1,2,0,2,2,1,1,2]}}}}
+
+// {"data":{"multiplayerCrashBet":{"id":"b8ca38b7-9956-46c7-bb32-45a4b9e1aeca","user":{"id":"8f7729d5-3b88-455a-8c5d-fc475592e90b","name":"0x9898","preferenceHideBets":false,"activeCrashBet":{"id":"b8ca38b7-9956-46c7-bb32-45a4b9e1aeca","user":{"id":"8f7729d5-3b88-455a-8c5d-fc475592e90b","name":"0x9898","preferenceHideBets":false},"payoutMultiplier":0,"gameId":"f37218cc-a35a-4f6d-966a-de67f5bb9cf3","amount":0,"payout":0,"currency":"btc","result":"pending","updatedAt":"Wed, 01 Jan 2025 10:47:31 GMT","cashoutAt":2,"btcAmount":0}},"payoutMultiplier":0,"gameId":"f37218cc-a35a-4f6d-966a-de67f5bb9cf3","amount":0,"payout":0,"currency":"btc","result":"pending","updatedAt":"Wed, 01 Jan 2025 10:47:31 GMT","cashoutAt":2,"btcAmount":0}}}
+
+// {"data":{"limboBet":{"id":"d7104595-3cb2-454d-87de-789a14a89375","active":false,"payoutMultiplier":2,"amountMultiplier":1,"amount":0,"payout":0,"updatedAt":"Wed, 01 Jan 2025 10:51:01 GMT","currency":"btc","game":"limbo","user":{"id":"8f7729d5-3b88-455a-8c5d-fc475592e90b","name":"0x9898"},"state":{"result":25.148905645293166,"multiplierTarget":2}}}}
+
+// {"data":{"kenoBet":{"id":"14f147dd-8f4e-491a-94ca-69828f5d230c","active":false,"payoutMultiplier":0,"amountMultiplier":1,"amount":0,"payout":0,"updatedAt":"Wed, 01 Jan 2025 10:52:19 GMT","currency":"btc","game":"keno","user":{"id":"8f7729d5-3b88-455a-8c5d-fc475592e90b","name":"0x9898"},"state":{"drawnNumbers":[28,37,33,9,4,23,31,32,29,21],"selectedNumbers":[2,7,12,14,16,27,25,29,28,38],"risk":"medium"}}}}
+
+// before
+// {"data":{"blackjackBet":{"id":"1cf14563-a476-432d-897d-deb14dd84ab6","active":true,"payoutMultiplier":0,"amountMultiplier":1,"amount":0,"payout":0,"updatedAt":"Wed, 01 Jan 2025 10:59:41 GMT","currency":"btc","game":"blackjack","user":{"id":"8f7729d5-3b88-455a-8c5d-fc475592e90b","name":"0x9898"},"state":{"player":[{"value":17,"actions":["deal"],"cards":[{"rank":"10","suit":"D"},{"rank":"7","suit":"D"}]}],"dealer":[{"value":10,"actions":["deal"],"cards":[{"rank":"J","suit":"S"}]}]}}}}
+// after
+// {"data":{"blackjackNext":{"id":"1cf14563-a476-432d-897d-deb14dd84ab6","active":false,"payoutMultiplier":0,"amountMultiplier":1,"amount":0,"payout":0,"updatedAt":"Wed, 01 Jan 2025 11:04:57 GMT","currency":"btc","game":"blackjack","user":{"id":"8f7729d5-3b88-455a-8c5d-fc475592e90b","name":"0x9898"},"state":{"player":[{"value":26,"actions":["deal","double","bust"],"cards":[{"rank":"10","suit":"D"},{"rank":"7","suit":"D"},{"rank":"9","suit":"C"}]}],"dealer":[{"value":10,"actions":["deal"],"cards":[{"rank":"J","suit":"S"}]}]}}}}
+
+// black jack seeds
+// {"data":{"user":{"id":"8f7729d5-3b88-455a-8c5d-fc475592e90b","activeClientSeed":{"id":"b0faf094-29ba-48f1-aaec-c7e74b85afe8","seed":"5ad51ea0a09006cc","__typename":"CasinoClientSeed"},"activeServerSeed":{"id":"827df9a4-9f43-4157-b685-8c7f37c7bb1b","nonce":54,"seedHash":"fe900d3b6c2eee191dc40552170ee4c82a2963bc04157bd7f69884ad1afff73f","nextSeedHash":"032befee056e0eb44e73e872940b836c6f21577eed8b2a1353350e5cc6cef199","__typename":"CasinoServerSeed"},"activeCasinoBets":[{"id":"1cf14563-a476-432d-897d-deb14dd84ab6","amount":0,"currency":"btc","game":"blackjack","createdAt":"Wed, 01 Jan 2025 10:59:41 GMT","__typename":"CasinoBet"},{"id":"953d65bf-6aec-49a6-8761-cf751f2d28eb","amount":0,"currency":"btc","game":"mines","createdAt":"Wed, 01 Jan 2025 10:31:06 GMT","__typename":"CasinoBet"}],"__typename":"User"}}}

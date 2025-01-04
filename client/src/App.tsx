@@ -29,7 +29,9 @@ function App() {
             }}>
                 Signin
             </button>
+
             <h1>Vite + React</h1>
+
             <div className="card">
                 <button>
                     <a href={getGoogleOauthUrl()}>
@@ -37,7 +39,6 @@ function App() {
                     </a>
                 </button>
             </div>
-
 
             <button onClick={async () => {
                 await axios.post("http://localhost:3000/api/auth/two-factor", {
@@ -47,8 +48,6 @@ function App() {
                 });
             }}>Submit
             </button>
-
-
         </>
     )
 }

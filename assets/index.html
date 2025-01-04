@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Plinio + Canvas</title>
+    <style>
+        canvas {
+            background: black;
+        }
+
+        #addBalls {
+            position: absolute;
+            right: 0;
+            top: 0;
+            margin: 20px;
+            background: #242424;
+            padding: 10px;
+            color: white;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+<canvas id="canvas" width="800" height="800"></canvas>
+<div id="addBalls">Add Ball</div>
+<script>
+    const canvas = document.getElementById("canvas");
+    ctx = canvas.getContext("2d"); // this context is used to createRectangle, create Triangle, createLine
+
+
+    const DECIMAL_MULTIPLIER = 10000;
+    const WIDTH = 800;
+    const HEIGHT = 800;
+    const ballRadius = 7;
+    const obstacleRadius = 4;
+    // we aren't taking time into consideration so, well make it possible
+    const gravity = pad(0.4);
+    const horizontalFriction = 0.4; // why horizontal and vertical friction differ so much
+    const verticalFriction = 0.8;
+
+    // will store that are in the view or created
+    const balls = [];
+    // in-memory array initialize to the obstacle
+    const obstacles = [];
+    const sinks = [];
+
+    // every machine parse decimal different way so we pad it, or avoid precision errors
+    // to speed and acceleration
+    function pad(n) {
+        return n * DECIMAL_MULTIPLIER;
+    }
+
+    function unpad(n) {
+        return Math.floor(n / DECIMAL_MULTIPLIER);
+    }
+
+    // create obstacles in a pyramid shape - build top 2 bottom
+    const rows = 16;
+    // 2 ----> 15 (number of rows changes as per the user choice)
+    for (let row = 2; row < rows; row++) {
+        const numberOfObstacles = row + 1; // 3
+        const y = row * 35; // positioning of "y" from top
+        const spacing = 36; // spacing between each obstacle
+        for (let col = 0; col < numberOfObstacles; col++) {
+            const x = WIDTH / 2 - spacing * (row / 2 - col);
+            // 800 / 2 - 36 * (2 / 2 - 0) = 800 / 2 - 36 * (1 - 0) = 400 - 36 = 364
+            // 800 / 2 - 36 * (2 / 2 - 1) = 800 / 2 - 36 * (1 - 1) = 400 - 0  = 400
+            // 800 / 2 - 36 * (2 / 2 - 2) = 800 / 2 - 36 * (1 - 2) = 400 - 36 * -1 = 436
+            obstacles.push({x: pad(x), y: pad(y), radius: obstacleRadius})
+        }
+    }
+
+    // create sinks at the bottom as rectangles
+    const sinkWidth = 36;
+    const NUM_SINK = 15;
+    // 0 ----------> 14
+    for (let i = 0; i < NUM_SINK; i++) {
+        // middle of canvas (minus some number or plus some number)
+        const x = WIDTH / 2 + (i - NUM_SINK / 2) * (sinkWidth) + obstacleRadius;
+        // for i = 0
+        // =>  800 / 2 + (0 - 15/2) * 36 + 4
+        //        400 + (0 - 7.5) * 36 + 4
+        //        400 - 7.5 * 36 + 4
+        //        400 - 270 + 4
+        //        400 - 274
+        //        126
+        // for i = 7
+        // => 800 / 2 + (7 - 15/2) * 36 + 4
+        //        400 + (7 - 7.5) * 36 + 4
+        //        400 + (-0.5) * 36 + 4
+        //        400 - 0.5 * 36 + 4
+        //        400 - 18 + 4
+        //        400 - 22
+        //        388
+
+        const y = HEIGHT - 240;
+        const width = sinkWidth;
+        const heights = width;
+        // here we have x and y and in the final games rendering we'll figure out does collision happened or not
+        sinks.push({x, y, width, heights})
+    }
+
+    // obstacles, sinks
+
+    class Ball {
+        constructor(x, y, radius, color) {
+            this.x = x;
+            this.y = y;
+            this.radius = radius;
+            this.color = color;
+            this.vx = 0;
+            this.vy = 0;
+        }
+
+        draw() {
+            // when we're rendering the circle and shapes, we have to begin the path
+            ctx.beginPath()
+            ctx.arc(unpad(this.x), unpad(this.y), this.radius, 0, Math.PI * 2);
+            ctx.fillStyle = this.color
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        // game-loop which mean something happening on very millisecond
+        // and in update method, something is calculating
+        // if collision happen shall, I change the velocity
+        // calculating the velocity
+        update() {
+            this.vy += gravity; // v = u + at, but we aren't taking time into consideration
+            // why we aren't taking horizontal velocity into consideration, cuz there is no horizontal gravity
+            this.x += this.vx; // x = u + vt
+            this.y += this.vy; // we also updated the actual position
+            // there is no gravity in the horizontal direction, but there is velocity in the horizontal direction
+            // collision with all the obstacles
+            obstacles.forEach((obstacles) => {
+                // firstly, find the distance between the center of ball and center of the obstacle
+                const dist = Math.hypot(this.x - obstacles.x, this.y - obstacles.y); // hypotenuse
+                // if dist is smaller than combined radius of two(radius of ball and radius of obstacle)
+                if (dist < pad(this.radius + obstacles.radius)) {
+                    // find the angle of the collision
+                    const angle = Math.atan2(this.x - obstacles.x, this.y - obstacles.y);
+                    // reflect velocity
+                    const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                    this.vx = (Math.cos(angle) * speed * horizontalFriction); // we also have to maintain friction
+                    this.vy = (Math.sin(angle) * speed * verticalFriction);
+
+                    // adjust position to prevent sticking
+                    const overlap = this.radius + obstacles.radius - unpad(dist); // this is the ball and obstacle overlap
+                    this.x += pad(Math.cos(angle) * overlap);
+                    this.y += pad(Math.sin(angle) * overlap);
+                }
+            });
+
+            // collision with sink
+            sinks.forEach((sink) => {
+                if (
+                    unpad(this.x) > sink.x - sink.width / 2 &&
+                    unpad(this.x) < sink.x + sink.width / 2 &&
+                    unpad(this.y) + this.radius > sink.y - sink.height / 2
+                ) {
+                    this.vx = 0;
+                    this.vy = 0;
+                }
+            })
+        }
+    }
+
+    //  game loop
+    // create a new all class
+    const initialBall = new Ball(pad(WIDTH / 2 + 23), pad(50), ballRadius, "red")
+    balls.push(initialBall);
+
+
+    function drawObstacles() {
+        ctx.fillStyle = "white";
+        obstacles.forEach((obstacle) => {
+            ctx.beginPath();
+            ctx.arc(unpad(obstacle.x), unpad(obstacle.y), obstacle.radius, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.closePath();
+        })
+    }
+
+    function drawSinks() {
+        ctx.fillStyle = "green";
+        sinks.forEach((sink) => {
+            ctx.fillRect(sink.x, sink.y - sink.heights / 2, sink.width - obstacleRadius * 2, sink.heights);
+        })
+    }
+
+    function addBall() {
+        const initialBall = new Ball(pad(WIDTH / 2), pad(50), ballRadius, "red")
+        balls.push(initialBall);
+    }
+
+    document.getElementById("addBalls").addEventListener("click", addBall);
+
+    // game loop that will
+    function draw() {
+        // clear the whole thing
+        ctx.clearRect(0, 0, WIDTH, HEIGHT);
+        drawObstacles();
+        drawSinks();
+        balls.forEach((ball) => {
+            ball.draw();
+            ball.update();
+        })
+    }
+
+    function update() {
+        draw();
+        requestAnimationFrame(update);
+    }
+
+    update();
+
+</script>
+</body>
+</html>
